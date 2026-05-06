@@ -313,13 +313,11 @@ const QUIZ_CONFIG = {
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
-     height: auto;
+  height: 100%;
   overflow-x: hidden;
 }
 
 body {
-     
-margin: 0;
   font-family: var(--font-body);
   color: var(--ink);
   background:
@@ -327,15 +325,11 @@ margin: 0;
     radial-gradient(circle at 85% 90%, #ffe7c2 0%, transparent 45%),
     radial-gradient(circle at 50% 50%, #fff 0%, #fff5f6 100%);
   min-height: 100vh;
-
-  /* ✅ REMOVE FLEX CENTERING */
-  display: block;
-
-  /* ✅ REMOVE vertical centering */
-  align-items: unset;
-  justify-content: unset;
-
-  padding: 0; /* optional */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  -webkit-tap-highlight-color: transparent;
 }
 
 [dir="rtl"] body {
@@ -367,12 +361,15 @@ margin: 0;
 
 /* ===== APP CONTAINER ===== */
 .app {
-
-width: 100%;
-  max-width: none;
-  margin: 0;
-  border-radius: 0;
-  box-shadow: none;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 720px;
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  border: 3px solid #fff;
 }
 
 /* ===== TOP BAR (in-game) ===== */
