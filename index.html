@@ -1966,7 +1966,8 @@ const STATE = {
   matchAttempts: 0,
   matchWrong: 0,
   audioEnabled: false,
-  audioObjs: {}
+  audioObjs: {},
+  gameEnded: false
 };
 
 // ----- DOM refs -----
@@ -2339,6 +2340,7 @@ $("startBtn").addEventListener("click", () => {
 
 function beginQuiz() {
   STATE.startTime = Date.now();
+  STATE.gameEnded = false;  // Reset re-entry guard for each new attempt
   initAudio();
   STATE.qIdx = 0;
   STATE.score = 0;
@@ -2779,6 +2781,13 @@ function proceed() {
 
 // ----- END GAME (success path) -----
 function endGame() {
+  // Re-entry guard — if we've already submitted for this game, just re-show the end screen.
+  if (STATE.gameEnded) {
+    showScreen("end");
+    return;
+  }
+  STATE.gameEnded = true;
+
   stopTimer();
   const t = I18N[STATE.lang];
   const total = QUIZ_CONFIG.questions.length;
@@ -2829,6 +2838,13 @@ function endGame() {
 
 // ----- GAME OVER -----
 function endGameover() {
+  // Re-entry guard — if we've already submitted for this game, just re-show the gameover screen.
+  if (STATE.gameEnded) {
+    showScreen("gameover");
+    return;
+  }
+  STATE.gameEnded = true;
+
   stopTimer();
   const t = I18N[STATE.lang];
   $("gameoverTitle").textContent = t.gameoverTitle;
