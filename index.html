@@ -66,7 +66,8 @@ const QUIZ_CONFIG = {
     { en: "TekZone",                 ar: "تك زون" },
     { en: "The Body Shop",           ar: "ذا بودي شوب" },
     { en: "VAVAVOOM",                ar: "فافافوم" },
-    { en: "Ulta Beauty",             ar: "ألتا بيوتي" }
+    { en: "Ulta Beauty",             ar: "ألتا بيوتي" },
+    { en: "Other",                   ar: "أخرى" }
   ],
 
   // ---- SHARE — short victory tagline shown on the share card ----
@@ -944,6 +945,16 @@ body {
   flex-direction: column;
   gap: 5px;
 }
+
+/* "Other brand" field — slides in from above when revealed */
+.reg-field-other {
+  animation: reg-slide-in 0.28s cubic-bezier(.4, 0, .2, 1);
+}
+@keyframes reg-slide-in {
+  from { opacity: 0; transform: translateY(-6px); max-height: 0; }
+  to   { opacity: 1; transform: translateY(0);    max-height: 100px; }
+}
+.reg-field[hidden] { display: none; }
 .reg-label {
   font-size: 12px;
   font-weight: 700;
@@ -1598,6 +1609,12 @@ body {
           </select>
         </div>
 
+        <!-- Shown only when "Other" is picked in the brand dropdown -->
+        <div class="reg-field reg-field-other" id="otherBrandField" hidden>
+          <label class="reg-label" id="otherBrandLabel" for="otherBrandInput">Please specify your brand</label>
+          <input type="text" class="reg-input" id="otherBrandInput" maxlength="60" autocomplete="off" />
+        </div>
+
         <div class="reg-error" id="regError"></div>
       </div>
 
@@ -1822,6 +1839,9 @@ const I18N = {
     nameLabel: "Your Name",
     brandLabel: "Your Brand",
     brandPlaceholder: "Select your brand…",
+    otherBrandLabel: "Please specify your brand",
+    otherBrandPlaceholder: "Type your brand name",
+    otherBrandRequired: "Please type your brand name",
 
     // Validation
     empIdRequired: "Please enter your employee ID",
@@ -1910,6 +1930,9 @@ const I18N = {
     nameLabel: "اسمك",
     brandLabel: "العلامة التجاريّة",
     brandPlaceholder: "اختر علامتك التجاريّة…",
+    otherBrandLabel: "من فضلك حدّد علامتك التجاريّة",
+    otherBrandPlaceholder: "اكتب اسم علامتك التجاريّة",
+    otherBrandRequired: "من فضلك اكتب اسم علامتك التجاريّة",
 
     // Validation
     empIdRequired: "من فضلك اكتب رقمك الوظيفي",
@@ -2063,6 +2086,8 @@ function applyLang() {
   $("playerNameInput").placeholder = t.namePlaceholder;
   $("brandLabel").textContent = t.brandLabel;
   $("brandPlaceholder").textContent = t.brandPlaceholder;
+  $("otherBrandLabel").textContent = t.otherBrandLabel;
+  $("otherBrandInput").placeholder = t.otherBrandPlaceholder;
 
   // Repopulate brand dropdown options in current language (preserve selected value)
   populateBrandDropdown();
@@ -2112,7 +2137,27 @@ function populateBrandDropdown() {
   });
   // restore previous selection if any
   if (prevIndex > 0 && prevIndex < sel.options.length) sel.selectedIndex = prevIndex;
+  // After repopulating, re-evaluate whether to show the "Other" field
+  updateOtherFieldVisibility();
 }
+
+// Show/hide the "Other brand" text input based on whether "Other" is selected.
+// Called from: brandSelect change events, language switches, and form resets.
+function updateOtherFieldVisibility() {
+  const sel = $("brandSelect");
+  const otherField = $("otherBrandField");
+  // "Other" is the last item in QUIZ_CONFIG.brands. Its selectedIndex is brands.length.
+  const isOther = (sel.selectedIndex === QUIZ_CONFIG.brands.length);
+  if (isOther) {
+    otherField.hidden = false;
+  } else {
+    otherField.hidden = true;
+    // Clear the text + any error when switching away from Other
+    $("otherBrandInput").value = "";
+    $("otherBrandInput").classList.remove("error");
+  }
+}
+$("brandSelect").addEventListener("change", updateOtherFieldVisibility);
 
 document.querySelectorAll(".lang-btn").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -2244,10 +2289,13 @@ $("dupeBtn").addEventListener("click", () => {
     $("empIdInput").value = "";
     $("playerNameInput").value = "";
     $("brandSelect").selectedIndex = 0;
+    $("otherBrandInput").value = "";
+    $("otherBrandField").hidden = true;
     $("regError").textContent = "";
     $("empIdInput").classList.remove("error");
     $("playerNameInput").classList.remove("error");
     $("brandSelect").classList.remove("error");
+    $("otherBrandInput").classList.remove("error");
   }
 });
 
@@ -2291,12 +2339,16 @@ $("startBtn").addEventListener("click", () => {
   const empId = $("empIdInput").value.trim();
   const name  = $("playerNameInput").value.trim();
   const brandIdx = $("brandSelect").selectedIndex;
+  // The "Other" option is the last brand in QUIZ_CONFIG.brands. Compute its
+  // 1-based index (matches selectedIndex including the placeholder at 0).
+  const otherBrandIdx = QUIZ_CONFIG.brands.length;
 
   // Reset error styling
   $("regError").textContent = "";
   $("empIdInput").classList.remove("error");
   $("playerNameInput").classList.remove("error");
   $("brandSelect").classList.remove("error");
+  $("otherBrandInput").classList.remove("error");
 
   // Validation
   if (!empId) {
@@ -2317,11 +2369,25 @@ $("startBtn").addEventListener("click", () => {
     $("brandSelect").focus();
     return;
   }
+  // If "Other" is selected, require the text field too
+  const isOther = (brandIdx === otherBrandIdx);
+  const otherBrandText = $("otherBrandInput").value.trim();
+  if (isOther && !otherBrandText) {
+    $("otherBrandInput").classList.add("error");
+    $("regError").textContent = t.otherBrandRequired;
+    $("otherBrandInput").focus();
+    return;
+  }
 
-  // Stash registration in STATE
+  // Stash registration in STATE.
+  // For "Other", store as 'Other: <what they typed>' so reports can filter
+  // by `starts with "Other:"` to find write-in brands. For known brands,
+  // always store the English name regardless of UI language.
   STATE.empId = empId;
   STATE.name  = name;
-  STATE.brand = QUIZ_CONFIG.brands[brandIdx - 1].en;  // always store English brand name for reporting
+  STATE.brand = isOther
+    ? "Other: " + otherBrandText
+    : QUIZ_CONFIG.brands[brandIdx - 1].en;
 
   // Duplicate check — graceful: if it fails, we let them play
   showLoading(t.checkingId);
@@ -2921,10 +2987,13 @@ function handlePlayAgain() {
   $("empIdInput").value = "";
   $("playerNameInput").value = "";
   $("brandSelect").selectedIndex = 0;
+  $("otherBrandInput").value = "";
+  $("otherBrandField").hidden = true;
   $("regError").textContent = "";
   $("empIdInput").classList.remove("error");
   $("playerNameInput").classList.remove("error");
   $("brandSelect").classList.remove("error");
+  $("otherBrandInput").classList.remove("error");
   showScreen("start");
 }
 
