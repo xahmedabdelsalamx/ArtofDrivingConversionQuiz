@@ -1828,13 +1828,25 @@ const I18N = {
     synced: "Score saved ✓",
     syncFailed: "Saved locally — we'll keep trying ↻",
 
-    // Duplicate modal
+    // Duplicate modal — used in two scenarios
     dupeTitle: "Welcome back!",
     dupeMessage: name => `Hi ${name}, you've already played this module. Each colleague gets one attempt to keep things fair.`,
     dupePrevScore: "Your previous score:",
     dupePoints: "points",
     dupeAccuracy: "accuracy",
     dupeBtn: "Got it",
+
+    // Scenario A: still has attempts left
+    welcomeBackTitle: "Welcome back!",
+    welcomeBackMsg: (name, used, max) => `Hi ${name}, this will be your attempt ${used + 1} of ${max}. Beat your best score!`,
+    yourBestScore: "Your best so far:",
+    keepGoingBtn: "▶ Let's Go!",
+
+    // Scenario B: all attempts used
+    allUsedTitle: "All attempts used",
+    allUsedMsg: (name, max, resetDate) => `Hi ${name}, you've used all ${max} of your attempts this month. New attempts unlock on ${resetDate}.`,
+    allUsedBestLabel: "Your best this month:",
+    allUsedBtn: "Got it",
   },
   ar: {
     score: "النقاط",
@@ -1904,13 +1916,25 @@ const I18N = {
     synced: "تمّ حفظ النقاط ✓",
     syncFailed: "تمّ الحفظ محليًّا — سنواصل المحاولة ↻",
 
-    // Duplicate modal
+    // Duplicate modal — used in two scenarios
     dupeTitle: "أهلًا بعودتك!",
     dupeMessage: name => `مرحبًا ${name}، لقد لعبت هذه الوحدة من قبل. كلّ زميل لديه محاولة واحدة لضمان العدالة.`,
     dupePrevScore: "نتيجتك السابقة:",
     dupePoints: "نقطة",
     dupeAccuracy: "دقّة",
     dupeBtn: "حسنًا",
+
+    // Scenario A: still has attempts left
+    welcomeBackTitle: "أهلًا بعودتك!",
+    welcomeBackMsg: (name, used, max) => `مرحبًا ${name}، هذه محاولتك رقم ${used + 1} من ${max}. تغلّب على نتيجتك السابقة!`,
+    yourBestScore: "أفضل نتيجة لك حتى الآن:",
+    keepGoingBtn: "▶ هيا بنا!",
+
+    // Scenario B: all attempts used
+    allUsedTitle: "انتهت محاولاتك",
+    allUsedMsg: (name, max, resetDate) => `مرحبًا ${name}، استخدمت كل المحاولات الـ${max} لهذا الشهر. ستفتح محاولات جديدة في ${resetDate}.`,
+    allUsedBestLabel: "أفضل نتيجة لك هذا الشهر:",
+    allUsedBtn: "حسنًا",
   }
 };
 
@@ -2134,29 +2158,90 @@ function showSyncPill(text, kind) {
   pill._t = setTimeout(() => pill.classList.remove("show"), 4000);
 }
 
-// Show the duplicate modal with the previous attempt details
+// Show the welcome/dupe modal. Behaviour depends on the response from the backend:
+//  - If canPlay === true: scenario A — "Attempt X of 3", button starts the game
+//  - If canPlay === false: scenario B — "All attempts used", button just dismisses
+//  - Legacy fallback (no canPlay field): treat as block, single-attempt mode
+// We stash the mode on the overlay element so the click handler knows what to do.
 function showDupeModal(prev) {
   const t = I18N[STATE.lang];
-  $("dupeTitle").textContent = t.dupeTitle;
-  $("dupeMessage").textContent = t.dupeMessage(prev.name || STATE.name);
-  $("dupeScoreLabel").textContent = t.dupePrevScore;
+  const overlay = $("dupeOverlay");
   const score = Number(prev.score || 0);
   const acc   = Number(prev.accuracy || 0);
-  $("dupeScoreNum").textContent = STATE.lang === "ar" ? arNum(score) : score;
-  $("dupeAccuracyNum").textContent = STATE.lang === "ar"
-    ? arNum(acc) + "٪"
-    : acc + "%";
-  $("dupePointsLbl").textContent = t.dupePoints;
+  const used  = Number(prev.attemptsUsed || 1);
+  const max   = Number(prev.maxAttempts || 1);
+  const name  = prev.name || STATE.name;
+
+  // Decide mode
+  let mode;
+  if (typeof prev.canPlay === "boolean") {
+    mode = prev.canPlay ? "welcomeBack" : "allUsed";
+  } else {
+    mode = "blockedLegacy";  // Old single-attempt fallback
+  }
+  overlay.dataset.mode = mode;
+
+  // Format numbers (Arabic numerals where applicable)
+  const fmtNum = n => STATE.lang === "ar" ? arNum(n) : String(n);
+  const fmtAcc = n => STATE.lang === "ar" ? arNum(n) + "٪" : n + "%";
+  const fmtDate = iso => {
+    // Convert "2026-06-01" to "1 June 2026" / "١ يونيو ٢٠٢٦"
+    if (!iso) return "";
+    try {
+      const d = new Date(iso);
+      const monthsEn = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      const monthsAr = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+      const months = STATE.lang === "ar" ? monthsAr : monthsEn;
+      const day = STATE.lang === "ar" ? arNum(d.getDate()) : d.getDate();
+      const yr  = STATE.lang === "ar" ? arNum(d.getFullYear()) : d.getFullYear();
+      return `${day} ${months[d.getMonth()]} ${yr}`;
+    } catch (e) { return iso; }
+  };
+
+  if (mode === "welcomeBack") {
+    $("dupeTitle").textContent   = t.welcomeBackTitle;
+    $("dupeMessage").textContent = t.welcomeBackMsg(name, used, max);
+    $("dupeScoreLabel").textContent = t.yourBestScore;
+    $("dupeBtn").textContent     = t.keepGoingBtn;
+  } else if (mode === "allUsed") {
+    $("dupeTitle").textContent   = t.allUsedTitle;
+    $("dupeMessage").textContent = t.allUsedMsg(name, max, fmtDate(prev.resetDate));
+    $("dupeScoreLabel").textContent = t.allUsedBestLabel;
+    $("dupeBtn").textContent     = t.allUsedBtn;
+  } else {
+    // Legacy single-attempt block
+    $("dupeTitle").textContent   = t.dupeTitle;
+    $("dupeMessage").textContent = t.dupeMessage(name);
+    $("dupeScoreLabel").textContent = t.dupePrevScore;
+    $("dupeBtn").textContent     = t.dupeBtn;
+  }
+
+  $("dupeScoreNum").textContent    = fmtNum(score);
+  $("dupeAccuracyNum").textContent = fmtAcc(acc);
+  $("dupePointsLbl").textContent   = t.dupePoints;
   $("dupeAccuracyLbl").textContent = t.dupeAccuracy;
-  $("dupeBtn").textContent = t.dupeBtn;
-  $("dupeOverlay").classList.add("show");
+
+  overlay.classList.add("show");
 }
+
 $("dupeBtn").addEventListener("click", () => {
-  $("dupeOverlay").classList.remove("show");
-  // Clear the form so the next colleague starts fresh
-  $("empIdInput").value = "";
-  $("playerNameInput").value = "";
-  $("brandSelect").selectedIndex = 0;
+  const overlay = $("dupeOverlay");
+  const mode = overlay.dataset.mode || "blockedLegacy";
+  overlay.classList.remove("show");
+
+  if (mode === "welcomeBack") {
+    // They have attempts left — proceed into the game
+    beginQuiz();
+  } else {
+    // allUsed or legacy block — clear the form so the next colleague starts fresh
+    $("empIdInput").value = "";
+    $("playerNameInput").value = "";
+    $("brandSelect").selectedIndex = 0;
+    $("regError").textContent = "";
+    $("empIdInput").classList.remove("error");
+    $("playerNameInput").classList.remove("error");
+    $("brandSelect").classList.remove("error");
+  }
 });
 
 // Submission queue — held in memory only (sessionStorage if available).
